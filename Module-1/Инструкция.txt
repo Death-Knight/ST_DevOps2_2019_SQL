@@ -1,0 +1,80 @@
+https://docs.microsoft.com/ru-ru/sql/database-engine/install-windows/install-sql-server-using-a-configuration-file?view=sql-server-2017
+https://docs.microsoft.com/ru-ru/sql/database-engine/install-windows/install-sql-server-from-the-command-prompt?view=sql-server-2017
+named instance automated install
+https://social.msdn.microsoft.com/Forums/sqlserver/en-US/a9a9d5e9-bd14-4595-8693-53dc182cf9b1/virtual-account-nt-servicesqlserveragent-provided-for-sqlagenta1234-is-either-not-a-valid?forum=sqlsetupandupgrade
+
+
+standart instance:
+
+1. comment PARAMETER:
+UIMODE
+2. addkey 
+; sa password
+SAPWD="BB12345bb"
+3. correct
+SQLSYSADMINACCOUNTS
+
+
+named instance
+1. comment PARAMETER: UIMODE
+2. addkey 
+; sa password in file
+SAPWD="BB12345bb"
+3. correct
+SQLSYSADMINACCOUNTS
+4. if change like
+INSTANCENAME="MSSQLAUTO"
+INSTANCEID="MSSQLAUTO"
+5. also change from
+; Agent account name 
+AGTSVCACCOUNT="NT Service\SQLSERVERAGENT"
+to this:
+AGTSVCACCOUNT="NT Service\SQLAGENT$MSSQLAUTO"
+6. also change from
+; Account for SQL Server service: Domain\User or system account. 
+SQLSVCACCOUNT="NT Service\MSSQLSERVER"
+to this:
+SQLSVCACCOUNT="NT Service\MSSQL$MSSQLAUTO"
+7. also change
+RSSVCACCOUNT="NT Service\ReportServer"
+to this
+RSSVCACCOUNT="NT Service\ReportServer$MSSQLAUTO"
+
+
+
+SQLBACKUPDIR
+
+may to ENABLED:
+; Specify 0 to disable or 1 to enable the TCP/IP protocol. 
+TCPENABLED="1"
+; Specify 0 to disable or 1 to enable the Named Pipes protocol. 
+NPENABLED="1"
+; Startup type for Browser Service. 
+BROWSERSVCSTARTUPTYPE="Automatic"
+
+
+
+-----
+/QS /IACCEPTSQLSERVERLICENSETERMS
+
+
+----
+The following error occurred:
+The SQL Server service account login or password is not valid. Use SQL Server Configuration M
+anager to update the service account.
+
+Error result: -2061893563
+Result facility code: 1306
+Result error code: 69
+----
+solution:
+add to ini-file
+; passwords
+SAPWD="AA12345aa"
+
+----
+Setup.exe /SQLSVCPASSWORD="password" /ASSVCPASSWORD="password" /AGTSVCPASSWORD="password"
+  /ISSVCPASSWORD="password" /RSSVCPASSWORD="password" /SAPWD="password"
+/ConfigurationFile=ConfigurationFile.INI
+
+
