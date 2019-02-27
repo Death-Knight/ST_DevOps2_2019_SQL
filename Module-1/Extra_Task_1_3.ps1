@@ -34,7 +34,7 @@ $FWRule1 = "---1 Inbound RDP TCP 3389"
 $FWRule2 = "---1 Inbound MSSQL TCP 1433"
 $FWRule3 = "---1 Inbound MSSQL UDP 1434"
 
-$InstallNamedInstance = $true
+$InstallNamedInstance = $false
 $NameOfNamedInstance = "DEVOPS2019"
 $FWRule4 = "---1 SQL Named Instance $NameOfNamedInstance"
 $SQLver = "12"
@@ -48,6 +48,7 @@ $def_data_path = "C:\Program Files\Microsoft SQL Server\MSSQL$SQLver.MSSQLSERVER
 
 # -------------------------------------
 
+
 # add firewall rules + retun their states
 # Import-Module NetSecurity
 
@@ -59,7 +60,7 @@ $FWRulesScriptStandart = {
     New-NetFirewallRule -DisplayName $Using:FWRule2 -Direction "Inbound" `
         -Action "Allow" -Profile "Any" -Protocol "TCP" -LocalPort "1433" 
     New-NetFirewallRule -DisplayName $Using:FWRule3 -Direction "Inbound" `
-        -Action "Allow" -Profile "Any" -Protocol "UDP" -LocalPort "1434"         
+        -Action "Allow" -Profile "Any" -Protocol "UDP" -LocalPort "1434"
     
     if ($Using:InstallNamedInstance -eq $true) {
         # $FWrules = @($Using:FWRule1, $Using:FWRule2, $Using:FWRule3, $Using:FWRule4)
@@ -135,29 +136,27 @@ $prepareFolder = {
 }
 Invoke-Command -ComputerName $vm1 -ScriptBlock $prepareFolder -Credential $myLogin
 
+
 # execute moving sql-code
+
 $mySQLLogin = "sa"
 $mySQLPass = Get-Credential -UserName $mySQLLogin -Message "SQL 'sa' password."
-# filename = N"'$Using:newTempDBdir\tempdb.mdf'")
-# $ff1 = "N'$newTempDBdir\tempdb.mdf'"
-$movingdb_SQLquery = {
+
+$movingdb_SQLquery2 = "
     use master
     alter database tempdb
     modify file(
     name = tempdev,    
-    filename = N'D:\new_tempdb\tempdb.mdf')
+    filename = N'$newTempDBdir\tempdb.mdf')
     go
 
     alter database tempdb
     modify file(
     name = templog,
-    filename = N'D:\new_tempdb\templog.ldf')
+    filename = N'$newTempDBdir\templog.ldf')
     go
-}
-# $newTempDBdir
-# $s_temp = "use master alter database tempdb modify file(name = tempdev, filename = N'D:\"+$newTempDBdir+"\tempdb.mdf') go"
-# $s_temp = "use master\n alter database tempdb\n modify file(\nname = tempdev, \nfilename = N'D:\"+$newTempDBdir+"\tempdb.mdf') \ngo"
-Invoke-Sqlcmd -ServerInstance $vm1 -Credential $mySQLPass -Query $movingdb_SQLquery
+"
+Invoke-Sqlcmd -ServerInstance $vm1 -Credential $mySQLPass -Query $movingdb_SQLquery2
 
 
 # restart  SQL service
@@ -179,6 +178,25 @@ $RestartSQLserviseScript = {
 Invoke-Command -ComputerName $vm1 -ScriptBlock $RestartSQLserviseScript -Credential $myLogin
 
 
+# change tempdb.mdf and templog.ldf sizes (ONLY UP SIZE)
+
+$changeTempSizes1 =  "
+    USE master
+    GO
+    ALTER DATABASE tempdb 
+    MODIFY FILE (NAME = tempdev, SIZE = 10MB, FILEGROWTH = 5MB, MAXSIZE = UNLIMITED)
+    GO
+"
+Invoke-Sqlcmd -ServerInstance $vm1 -Credential $mySQLPass -Query $changeTempSizes1
+$changeTempSizes2 =  "
+    USE master
+    GO
+    ALTER DATABASE tempdb 
+    MODIFY FILE (NAME = templog, SIZE = 10MB, FILEGROWTH = 1MB, MAXSIZE = UNLIMITED)
+    GO
+"
+Invoke-Sqlcmd -ServerInstance $vm1 -Credential $mySQLPass -Query $changeTempSizes2
+
 # remove old tempdb.mdf and templog.ldf
 
 $RemoveOldFiles = {
@@ -196,33 +214,35 @@ Invoke-Command -ComputerName $vm1 -ScriptBlock $RemoveOldFiles -Credential $myLo
 
 # -------------------------------------------
 
-$da
-$qw = "CREATE DATABASE Sales ON (NAME = Sales_dat,    FILENAME = 'D:\Data\Sales.mdf',
- SIZE = 100MB, MAXSIZE = 500MB, FILEGROWTH = 20%) LOG ON   (NAME = Sales_log,
-    FILENAME = 'D:\Logs\Sales.ldf', SIZE = 20MB, MAXSIZE = UNLIMITED, FILEGROWTH = 10MB); "
+# lab db creating 1
+
+$lab_db_name = "HumanResources1"
+$lab_db_name_log = "HumanResources1_log"
+$lab_db_query = "
+    CREATE DATABASE
+    $lab_db_name ON (NAME = $lab_db_name, FILENAME = 'D:\Data\$lab_db_name.mdf',
+    SIZE = 50MB, FILEGROWTH = 5MB, MAXSIZE = UNLIMITED)
+    LOG ON (NAME = $lab_db_name_log, FILENAME = 'D:\Logs\$lab_db_name_log.ldf',
+    SIZE = 5MB, FILEGROWTH = 1MB, MAXSIZE = UNLIMITED);
+"
+Invoke-Sqlcmd -ServerInstance $vm1 -Credential $mySQLPass -Query $lab_db_query
+
+# -------------------------------------------
+
+
+
+
+
+
+
+$qw = "CREATE DATABASE
+    Sales ON (NAME = Sales_dat, FILENAME = 'D:\Data\Sales.mdf',
+    SIZE = 100MB, MAXSIZE = 500MB, FILEGROWTH = 20%)
+    LOG ON (NAME = Sales_log, FILENAME = 'D:\Logs\Sales.ldf',
+    SIZE = 20MB, MAXSIZE = UNLIMITED, FILEGROWTH = 10MB);
+"
 Invoke-Sqlcmd -ServerInstance $vm1 -Credential $mySQLPass -Query $qw
 
 $qw_drop = "DROP DATABASE Sales"
 Invoke-Sqlcmd -ServerInstance $vm1 -Credential $mySQLPass -Query $qw_drop
 
-
-
-$nw = "
-    use master
-    alter database tempdb
-    modify file(
-    name = tempdev,    
-    filename = N'$newTempDBdir\tempdb.mdf')
-    go
-
-    alter database tempdb
-    modify file(
-    name = templog,
-    filename = N'$newTempDBdir\templog.ldf')
-    go
-"
-Invoke-Sqlcmd -ServerInstance $vm1 -Credential $mySQLPass -Query $nw
-
-$movingdb_SQLquery = {
-    
-}
